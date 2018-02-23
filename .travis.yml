@@ -1,3 +1,4 @@
+
 sudo: false
 
 language: go
@@ -10,4 +11,4 @@ before_install:
 
 script:
   - make check test
-  - GOOS=windows make install
+- GOOS=windows make install

@@ -1,3 +1,4 @@
+[![Codacy Badge](https://api.codacy.com/project/badge/Grade/15ada5f8811c4143a8e927901c59e2b4)](https://app.codacy.com/app/naveenholla/govmomi?utm_source=github.com&utm_medium=referral&utm_content=naveenholla/govmomi&utm_campaign=badger)
 [![Build Status](https://travis-ci.org/vmware/govmomi.png?branch=master)](https://travis-ci.org/vmware/govmomi)
 [![Go Report Card](https://goreportcard.com/badge/github.com/vmware/govmomi)](https://goreportcard.com/report/github.com/vmware/govmomi)
 [![Codacy Badge](https://api.codacy.com/project/badge/Grade/4edb3d952d714b52a2cc966f4c103c06)](https://www.codacy.com/app/naveenholla/govmomi?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=naveenholla/govmomi&amp;utm_campaign=Badge_Grade)
