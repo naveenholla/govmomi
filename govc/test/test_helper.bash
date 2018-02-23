@@ -7,6 +7,7 @@ export GOVC_PERSIST_SESSION=false
 unset GOVC_URL
 unset GOVC_DEBUG
 unset GOVC_TLS_KNOWN_HOSTS
+unset GOVC_TLS_HANDSHAKE_TIMEOUT
 unset GOVC_DATACENTER
 unset GOVC_HOST
 unset GOVC_USERNAME
@@ -37,10 +38,15 @@ GOVC_TEST_IMG=govc-images/$(basename $GOVC_TEST_IMG_SRC)
 
 PATH="$GOPATH/bin:$PATH"
 
+vcsim_stop() {
+  kill "$GOVC_SIM_PID"
+  rm -f "$GOVC_SIM_ENV"
+  unset GOVC_SIM_PID
+}
+
 teardown() {
   if [ -n "$GOVC_SIM_PID" ] ; then
-    kill "$GOVC_SIM_PID"
-    rm -f "$GOVC_SIM_ENV"
+    vcsim_stop
   else
     govc ls vm | grep govc-test- | $xargs -r govc vm.destroy
     govc datastore.ls | grep govc-test- | awk '{print ($NF)}' | $xargs -n1 -r govc datastore.rm
@@ -120,7 +126,7 @@ vcsim_env() {
 
   export GOVC_DATASTORE=LocalDS_0
 
-  if [ "$1" != "-esx" ] ; then
+  if [ "$1" != "-esx" ] && [ "$1" != "-esx=true" ]; then
     export GOVC_DATACENTER=DC0 \
            GOVC_HOST=/DC0/host/DC0_C0/DC0_C0_H0 \
            GOVC_RESOURCE_POOL=/DC0/host/DC0_C0/Resources \
@@ -214,14 +220,18 @@ assert_matches() {
   local actual="${2}"
 
   if [ $# -eq 1 ]; then
-    actual="$(cat -)"
+    actual="$output"
   fi
 
-  if ! grep -q "${pattern}" <<<"${actual}"; then
+  if ! grep -E -q "${pattern}" <<<"${actual}"; then
     { echo "pattern: ${pattern}"
       echo "actual:  ${actual}"
     } | flunk
   fi
+}
+
+assert_number() {
+  assert_matches "^-?[0-9]+$" "$output"
 }
 
 assert_empty() {

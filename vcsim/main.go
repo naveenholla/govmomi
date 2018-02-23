@@ -18,9 +18,11 @@ package main
 
 import (
 	"crypto/tls"
+	"expvar"
 	"flag"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"runtime"
@@ -45,6 +47,7 @@ func main() {
 	flag.IntVar(&model.Pod, "pod", model.Pod, "Number of storage pods per datacenter")
 	flag.IntVar(&model.Portgroup, "pg", model.Portgroup, "Number of port groups")
 	flag.IntVar(&model.Folder, "folder", model.Folder, "Number of folders")
+	flag.BoolVar(&model.Autostart, "autostart", model.Autostart, "Autostart model created VMs")
 
 	isESX := flag.Bool("esx", false, "Simulate standalone ESX")
 	isTLS := flag.Bool("tls", true, "Enable TLS")
@@ -83,6 +86,7 @@ func main() {
 		// Preserve options that also apply to ESX
 		model.Datastore = opts.Datastore
 		model.Machine = opts.Machine
+		model.Autostart = opts.Autostart
 	}
 
 	tag := " (govmomi simulator)"
@@ -107,6 +111,20 @@ func main() {
 			model.Service.TLS.Certificates = []tls.Certificate{c}
 		}
 	}
+
+	expvar.Publish("vcsim", expvar.Func(func() interface{} {
+		count := model.Count()
+
+		return struct {
+			Registry *simulator.Registry
+			Model    *simulator.Model
+		}{
+			simulator.Map,
+			&count,
+		}
+	}))
+
+	model.Service.ServeMux = http.DefaultServeMux // expvar.init registers "/debug/vars" with the DefaultServeMux
 
 	s := model.Service.NewServer()
 

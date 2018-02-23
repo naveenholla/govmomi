@@ -107,6 +107,14 @@ load test_helper
   assert_success
   assert_line "SyncTimeWithHost: true"
 
+  run govc object.collect -s "vm/$id" config.memoryAllocation.reservation
+  assert_success 0
+
+  govc vm.change -vm "$id" -mem.reservation 1024
+
+  run govc object.collect -s "vm/$id" config.memoryAllocation.reservation
+  assert_success 1024
+
   nid=$(new_id)
   run govc vm.change -name $nid -vm $id
   assert_success
@@ -146,6 +154,31 @@ load test_helper
   assert_success
   run vm_power_state $vm
   assert_success "poweredOn"
+}
+
+@test "vm.power -on -M" {
+  for esx in true false ; do
+    vcsim_env -esx=$esx -autostart=false
+
+    vms=($(govc find / -type m | sort))
+
+    # All VMs are off with -autostart=false
+    off=($(govc find / -type m -runtime.powerState poweredOff | sort))
+    assert_equal "${vms[*]}" "${off[*]}"
+
+    # Power on 1 VM to test that -M is idempotent
+    run govc vm.power -on "${vms[0]}"
+    assert_success
+
+    run govc vm.power -on -M "${vms[@]}"
+    assert_success
+
+    # All VMs should be powered on now
+    on=($(govc find / -type m -runtime.powerState poweredOn | sort))
+    assert_equal "${vms[*]}" "${on[*]}"
+
+    vcsim_stop
+  done
 }
 
 @test "vm.power -force" {
@@ -232,6 +265,9 @@ load test_helper
     assert_success
     assert_line "{\"VirtualMachines\":null}"
 
+    run govc vm.info -dump $id
+    assert_success
+
     run govc vm.create -on=false $id
     assert_success
 
@@ -273,6 +309,13 @@ load test_helper
   run govc vm.change -e "guestinfo.a=" -vm $id
   assert_success
   refute_line "guestinfo.a: 2"
+
+  # test optional bool Config
+  run govc vm.change -nested-hv-enabled=true -vm "$id"
+  assert_success
+
+  hv=$(govc vm.info -json "$id" | jq '.[][0].Config.NestedHVEnabled')
+  assert_equal "$hv" "true"
 }
 
 @test "vm.create linked ide disk" {
@@ -435,7 +478,8 @@ load test_helper
   result=$(govc device.ls -vm $vm | grep disk- | wc -l)
   [ $result -eq 1 ]
 
-  run govc import.vmdk $GOVC_TEST_VMDK_SRC $vm
+  id=$(new_id)
+  run govc import.vmdk $GOVC_TEST_VMDK_SRC $id
   assert_success
 
   run govc vm.disk.attach -vm $vm -link=false -disk enoent.vmdk
@@ -444,7 +488,7 @@ load test_helper
   run govc vm.disk.attach -vm $vm -disk enoent.vmdk
   assert_failure "govc: Invalid configuration for device '0'."
 
-  run govc vm.disk.attach -vm $vm -disk $vm/$(basename $GOVC_TEST_VMDK) -controller lsilogic-1000
+  run govc vm.disk.attach -vm $vm -disk $id/$(basename $GOVC_TEST_VMDK) -controller lsilogic-1000
   assert_success
   result=$(govc device.ls -vm $vm | grep disk- | wc -l)
   [ $result -eq 2 ]
@@ -478,26 +522,46 @@ load test_helper
 }
 
 @test "vm.register" {
-  vcsim_env -esx
+  esx_env
 
   run govc vm.unregister enoent
   assert_failure
 
   vm=$(new_empty_vm)
 
-  run govc vm.change -vm "$vm" -e foo=bar
-  assert_success
-
   run govc vm.unregister "$vm"
   assert_success
 
-  run govc vm.change -vm "$vm" -e foo=bar
-  assert_failure
-
   run govc vm.register "$vm/${vm}.vmx"
   assert_success
+}
 
-  run govc vm.change -vm "$vm" -e foo=bar
+@test "vm.register vcsim" {
+  vcsim_env -autostart=false
+
+  host=$GOVC_HOST
+  pool=$GOVC_RESOURCE_POOL
+
+  unset GOVC_HOST GOVC_RESOURCE_POOL
+
+  vm=DC0_H0_VM0
+
+  run govc vm.unregister $vm
+  assert_success
+
+  run govc vm.register "$vm/${vm}.vmx"
+  assert_failure # -pool is required
+
+  run govc vm.register -pool "$pool" "$vm/${vm}.vmx"
+  assert_success
+
+  run govc vm.unregister $vm
+  assert_success
+
+  run govc vm.register -template -pool "$pool" "$vm/${vm}.vmx"
+  assert_failure # -pool is not allowed w/ template
+
+  run govc vm.register -template -host "$host" "$vm/${vm}.vmx"
   assert_success
 }
 
@@ -507,14 +571,18 @@ load test_helper
   vm=$(new_empty_vm)
   clone=$(new_id)
 
-  run govc vm.clone -vm $vm $clone
+  run govc vm.clone -vm "$vm" "$clone"
   assert_success
 
-  result=$(govc device.ls -vm $clone | grep disk- | wc -l)
-  [ $result -eq 0 ]
+  clone=$(new_id)
+  run govc vm.clone -vm "$vm" -snapshot X "$clone"
+  assert_failure
 
-  result=$(govc device.ls -vm $clone | grep cdrom- | wc -l)
-  [ $result -eq 0 ]
+  run govc snapshot.create -vm "$vm" X
+  assert_success
+
+  run govc vm.clone -vm "$vm" -snapshot X "$clone"
+  assert_success
 }
 
 @test "vm.clone change resources" {
@@ -523,13 +591,36 @@ load test_helper
   vm=$(new_empty_vm)
   clone=$(new_id)
 
-  run govc vm.clone -m 1024 -c 2 -vm $vm $clone
+  run govc vm.info -r "$vm"
+  assert_success
+  assert_line "Network: $(basename "$GOVC_NETWORK")" # DVPG0
+
+  run govc vm.clone -m 1024 -c 2 -net "VM Network" -vm "$vm" "$clone"
   assert_success
 
-  run govc vm.info $clone
+  run govc vm.info -r "$clone"
   assert_success
   assert_line "Memory: 1024MB"
   assert_line "CPU: 2 vCPU(s)"
+  assert_line "Network: VM Network"
+
+  # Remove all NICs from source vm
+  run govc device.remove -vm "$vm" "$(govc device.ls -vm "$vm" | grep ethernet- | awk '{print $1}')"
+  assert_success
+
+  clone=$(new_id)
+
+  mac=00:00:0f:a7:a0:f1
+  run govc vm.clone -net "VM Network" -net.address $mac -vm "$vm" "$clone"
+  assert_success
+
+  run govc vm.info -r "$clone"
+  assert_success
+  assert_line "Network: VM Network"
+
+  run govc device.info -vm "$clone"
+  assert_success
+  assert_line "MAC Address: $mac"
 }
 
 @test "vm.clone usage" {
@@ -612,4 +703,35 @@ load test_helper
 
   run govc vm.console -capture - "$vm"
   assert_success
+}
+
+@test "vm.upgrade" {
+  esx_env
+
+  vm=$(new_empty_vm)
+
+  govc vm.upgrade -vm "$vm"
+  assert_success
+
+}
+
+@test "vm.markastemplate" {
+  vcsim_env
+
+  id=$(new_id)
+
+  run govc vm.create -on=true "$id"
+  assert_success
+
+  run govc vm.markastemplate "$id"
+  assert_failure
+
+  run govc vm.power -off "$id"
+  assert_success
+
+  run govc vm.markastemplate "$id"
+  assert_success
+
+  run govc vm.power -on "$id"
+  assert_failure
 }

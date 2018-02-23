@@ -71,6 +71,22 @@ func NewHostSystem(host mo.HostSystem) *HostSystem {
 	return hs
 }
 
+func (h *HostSystem) eventArgument() *types.HostEventArgument {
+	return &types.HostEventArgument{
+		Host:                h.Self,
+		EntityEventArgument: types.EntityEventArgument{Name: h.Name},
+	}
+}
+
+func (h *HostSystem) eventArgumentParent() *types.ComputeResourceEventArgument {
+	parent := hostParent(&h.HostSystem)
+
+	return &types.ComputeResourceEventArgument{
+		ComputeResource:     parent.Self,
+		EntityEventArgument: types.EntityEventArgument{Name: parent.Name},
+	}
+}
+
 func hostParent(host *mo.HostSystem) *mo.ComputeResource {
 	switch parent := Map.Get(*host.Parent).(type) {
 	case *mo.ComputeResource:
@@ -82,16 +98,29 @@ func hostParent(host *mo.HostSystem) *mo.ComputeResource {
 	}
 }
 
+func addComputeResource(s *types.ComputeResourceSummary, h *HostSystem) {
+	s.TotalCpu += h.Summary.Hardware.CpuMhz
+	s.TotalMemory += h.Summary.Hardware.MemorySize
+	s.NumCpuCores += h.Summary.Hardware.NumCpuCores
+	s.NumCpuThreads += h.Summary.Hardware.NumCpuThreads
+	s.EffectiveCpu += h.Summary.Hardware.CpuMhz
+	s.EffectiveMemory += h.Summary.Hardware.MemorySize
+	s.NumHosts++
+	s.NumEffectiveHosts++
+	s.OverallStatus = types.ManagedEntityStatusGreen
+}
+
 // CreateDefaultESX creates a standalone ESX
 // Adds objects of type: Datacenter, Network, ComputeResource, ResourcePool and HostSystem
 func CreateDefaultESX(f *Folder) {
-	dc := &esx.Datacenter
-	f.putChild(dc)
-	createDatacenterFolders(dc, false)
+	dc := NewDatacenter(f)
 
 	host := NewHostSystem(esx.HostSystem)
 
-	cr := &mo.ComputeResource{}
+	summary := new(types.ComputeResourceSummary)
+	addComputeResource(summary, host)
+
+	cr := &mo.ComputeResource{Summary: summary}
 	cr.Self = *host.Parent
 	cr.Name = host.Name
 	cr.Host = append(cr.Host, host.Reference())
@@ -119,9 +148,18 @@ func CreateStandaloneHost(f *Folder, spec types.HostConnectSpec) (*HostSystem, t
 	host.Name = host.Summary.Config.Name
 	host.Runtime.ConnectionState = types.HostSystemConnectionStateDisconnected
 
-	cr := &mo.ComputeResource{}
+	summary := new(types.ComputeResourceSummary)
+	addComputeResource(summary, host)
+
+	cr := &mo.ComputeResource{
+		ConfigurationEx: &types.ComputeResourceConfigInfo{
+			VmSwapPlacement: string(types.VirtualMachineConfigInfoSwapPlacementTypeVmDirectory),
+		},
+		Summary: summary,
+	}
 
 	Map.PutEntity(cr, Map.NewEntity(host))
+	host.Summary.Host = &host.Self
 
 	Map.PutEntity(cr, Map.NewEntity(pool))
 
@@ -141,11 +179,9 @@ func (h *HostSystem) EnterMaintenanceModeTask(spec *types.EnterMaintenanceMode_T
 		return nil, nil
 	})
 
-	task.Run()
-
 	return &methods.EnterMaintenanceMode_TaskBody{
 		Res: &types.EnterMaintenanceMode_TaskResponse{
-			Returnval: task.Self,
+			Returnval: task.Run(),
 		},
 	}
 }
@@ -156,11 +192,9 @@ func (h *HostSystem) ExitMaintenanceModeTask(spec *types.ExitMaintenanceMode_Tas
 		return nil, nil
 	})
 
-	task.Run()
-
 	return &methods.ExitMaintenanceMode_TaskBody{
 		Res: &types.ExitMaintenanceMode_TaskResponse{
-			Returnval: task.Self,
+			Returnval: task.Run(),
 		},
 	}
 }

@@ -48,6 +48,9 @@ class Peek
     end
 
     def base?
+      # VrpResourceAllocationInfo is removed in 6.7, so base will no longer generated
+      return false if @name == "ResourceAllocationInfo"
+
       return !children.empty?
     end
   end
@@ -199,7 +202,12 @@ class Simple
     t = self.type
     prefix = ""
 
-    prefix += "[]" if slice?
+    if slice?
+      prefix += "[]"
+      if ["AffinitySet"].include?(var_name)
+        self.need_omitempty = false
+      end
+    end
 
     if t =~ /^xsd:(.*)$/
       t = $1

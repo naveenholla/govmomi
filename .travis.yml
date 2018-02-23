@@ -1,18 +1,14 @@
 
+sudo: false
 
-{
-  "sudo": false,
-  "language": "go",
-  "go": 1.8,
-  "before_install": [
-    "make vendor"
-  ],
-  "script": [
-    "make check test",
-    "GOOS=windows make install"
-  ],
-  "group": "stable",
-  "dist": "trusty",
-  "os": "linux"
-}
+language: go
 
+go:
+   - 1.8
+
+before_install:
+  - make vendor
+
+script:
+  - make check test
+- GOOS=windows make install

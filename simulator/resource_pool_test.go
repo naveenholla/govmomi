@@ -53,7 +53,7 @@ func TestResourcePool(t *testing.T) {
 
 	parent := object.NewResourcePool(c, esx.ResourcePool.Self)
 
-	spec.CpuAllocation.GetResourceAllocationInfo().Reservation = nil
+	spec.CpuAllocation.Reservation = nil
 	// missing required field (Reservation) for create
 	_, err = parent.Create(ctx, "fail", spec)
 	if err == nil {
@@ -82,7 +82,7 @@ func TestResourcePool(t *testing.T) {
 		t.Error("expected new pool Self reference")
 	}
 
-	*spec.CpuAllocation.GetResourceAllocationInfo().Reservation = -1
+	*spec.CpuAllocation.Reservation = -1
 	// invalid field value (Reservation) for update
 	err = child.UpdateConfig(ctx, "", &spec)
 	if err == nil {
@@ -90,7 +90,7 @@ func TestResourcePool(t *testing.T) {
 	}
 
 	// valid config update
-	*spec.CpuAllocation.GetResourceAllocationInfo().Reservation = 10
+	*spec.CpuAllocation.Reservation = 10
 	err = child.UpdateConfig(ctx, "", &spec)
 	if err != nil {
 		t.Error(err)
@@ -102,7 +102,7 @@ func TestResourcePool(t *testing.T) {
 		t.Error(err)
 	}
 
-	if *p.Config.CpuAllocation.GetResourceAllocationInfo().Reservation != 10 {
+	if *p.Config.CpuAllocation.Reservation != 10 {
 		t.Error("config not updated")
 	}
 
@@ -271,52 +271,46 @@ func TestCreateVAppVPX(t *testing.T) {
 }
 
 func TestResourcePoolValidation(t *testing.T) {
-	var pool ResourcePool
-
 	tests := []func() bool{
 		func() bool {
-			return pool.allFieldsSet(nil)
-		},
-		func() bool {
-			r := new(types.ResourceAllocationInfo)
-			return pool.allFieldsSet(r)
+			return allResourceFieldsSet(&types.ResourceAllocationInfo{})
 		},
 		func() bool {
 			spec := types.DefaultResourceConfigSpec()
-			spec.CpuAllocation.GetResourceAllocationInfo().Limit = nil
-			return pool.allFieldsSet(spec.CpuAllocation)
+			spec.CpuAllocation.Limit = nil
+			return allResourceFieldsSet(&spec.CpuAllocation)
 		},
 		func() bool {
 			spec := types.DefaultResourceConfigSpec()
-			spec.CpuAllocation.GetResourceAllocationInfo().Reservation = nil
-			return pool.allFieldsSet(spec.CpuAllocation)
+			spec.CpuAllocation.Reservation = nil
+			return allResourceFieldsSet(&spec.CpuAllocation)
 		},
 		func() bool {
 			spec := types.DefaultResourceConfigSpec()
-			spec.CpuAllocation.GetResourceAllocationInfo().ExpandableReservation = nil
-			return pool.allFieldsSet(spec.CpuAllocation)
+			spec.CpuAllocation.ExpandableReservation = nil
+			return allResourceFieldsSet(&spec.CpuAllocation)
 		},
 		func() bool {
 			spec := types.DefaultResourceConfigSpec()
-			spec.CpuAllocation.GetResourceAllocationInfo().Shares = nil
-			return pool.allFieldsSet(spec.CpuAllocation)
+			spec.CpuAllocation.Shares = nil
+			return allResourceFieldsSet(&spec.CpuAllocation)
 		},
 		func() bool {
 			spec := types.DefaultResourceConfigSpec()
-			spec.CpuAllocation.GetResourceAllocationInfo().Reservation = types.NewInt64(-1)
-			return pool.allFieldsValid(spec.CpuAllocation)
+			spec.CpuAllocation.Reservation = types.NewInt64(-1)
+			return allResourceFieldsValid(&spec.CpuAllocation)
 		},
 		func() bool {
 			spec := types.DefaultResourceConfigSpec()
-			spec.CpuAllocation.GetResourceAllocationInfo().Limit = types.NewInt64(-100)
-			return pool.allFieldsValid(spec.CpuAllocation)
+			spec.CpuAllocation.Limit = types.NewInt64(-100)
+			return allResourceFieldsValid(&spec.CpuAllocation)
 		},
 		func() bool {
 			spec := types.DefaultResourceConfigSpec()
-			shares := spec.CpuAllocation.GetResourceAllocationInfo().Shares
+			shares := spec.CpuAllocation.Shares
 			shares.Level = types.SharesLevelCustom
 			shares.Shares = -1
-			return pool.allFieldsValid(spec.CpuAllocation)
+			return allResourceFieldsValid(&spec.CpuAllocation)
 		},
 	}
 

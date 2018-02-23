@@ -23,6 +23,9 @@ import (
 
 	_ "github.com/vmware/govmomi/govc/about"
 	_ "github.com/vmware/govmomi/govc/cluster"
+	_ "github.com/vmware/govmomi/govc/cluster/group"
+	_ "github.com/vmware/govmomi/govc/cluster/override"
+	_ "github.com/vmware/govmomi/govc/cluster/rule"
 	_ "github.com/vmware/govmomi/govc/datacenter"
 	_ "github.com/vmware/govmomi/govc/datastore"
 	_ "github.com/vmware/govmomi/govc/datastore/disk"
@@ -37,6 +40,7 @@ import (
 	_ "github.com/vmware/govmomi/govc/dvs/portgroup"
 	_ "github.com/vmware/govmomi/govc/env"
 	_ "github.com/vmware/govmomi/govc/events"
+	_ "github.com/vmware/govmomi/govc/export"
 	_ "github.com/vmware/govmomi/govc/extension"
 	_ "github.com/vmware/govmomi/govc/fields"
 	_ "github.com/vmware/govmomi/govc/folder"
