@@ -1,9 +1,9 @@
 GEM
   remote: https://rubygems.org/
   specs:
-    mini_portile (0.6.0)
-    nokogiri (1.6.3.1)
-      mini_portile (= 0.6.0)
+    mini_portile2 (2.4.0)
+    nokogiri (1.10.5)
+      mini_portile2 (~> 2.4.0)
     power_assert (0.4.1)
     test-unit (3.2.3)
       power_assert
@@ -12,8 +12,8 @@ PLATFORMS
   ruby
 
 DEPENDENCIES
-  nokogiri
+  nokogiri (>= 1.10.5)
   test-unit
 
 BUNDLED WITH
-   1.14.6
+   1.17.3
